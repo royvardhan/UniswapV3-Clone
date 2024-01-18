@@ -3,6 +3,7 @@ pragma solidity ^0.8.23;
 import {Test} from "forge-std/Test.sol";
 import {ERC20Mintable} from "./ERC20Mintable.sol";
 import {UniswapV3Pool} from "../src/UniswapV3Pool.sol";
+import "forge-std/Console.sol";
 
 contract UniswapV3PoolTest is Test {
     ERC20Mintable public token0;
@@ -81,7 +82,7 @@ contract UniswapV3PoolTest is Test {
         );
     }
 
-    function test_SwapBuyEth() public {
+    function testSwapBuyEth() public {
         TestCaseParams memory params = TestCaseParams({
             wethBalance: 1 ether,
             usdcBalance: 5000 ether,
@@ -95,13 +96,32 @@ contract UniswapV3PoolTest is Test {
             mintLiqudity: true
         });
         (uint256 poolBalance0, uint256 poolBalance1) = setupTestCase(params);
-        token1.mint(address(this), 42 ether);
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this));
+        uint256 swapAmount = 42 ether; // 42 USDC
+        token1.mint(address(this), swapAmount);
+        token1.approve(address(this), swapAmount);
 
-        assertEq(amount0Delta, -0.008396714242162444 ether);
-        assertEq(amount1Delta, 42 ether);
+        UniswapV3Pool.CallbackData memory extra = UniswapV3Pool.CallbackData({
+            token0: address(token0),
+            token1: address(token1),
+            payer: address(this)
+        });
 
+        int256 userBalance0Before = int256(token0.balanceOf(address(this)));
+
+        (int256 amount0Delta, int256 amount1Delta) = pool.swap(
+            address(this),
+            abi.encode(extra)
+        );
+
+        assertEq(amount0Delta, -0.008396714242162444 ether, "invalid ETH out");
+        assertEq(amount1Delta, 42 ether, "invalid USDC in");
+
+        assertEq(
+            token0.balanceOf(address(this)),
+            uint256(userBalance0Before - amount0Delta),
+            "invalid user ETH balance"
+        );
         assertEq(
             token1.balanceOf(address(this)),
             0,
@@ -147,11 +167,18 @@ contract UniswapV3PoolTest is Test {
         );
 
         if (params.mintLiqudity) {
+            token0.approve(address(this), params.wethBalance);
+            token1.approve(address(this), params.usdcBalance);
+
+            UniswapV3Pool.CallbackData memory extra = UniswapV3Pool
+                .CallbackData(address(token0), address(token1), address(this));
+
             pool.mint(
                 address(this),
                 params.lowerTick,
                 params.upperTick,
-                params.liquidity
+                params.liquidity,
+                abi.encode(extra)
             );
         }
 
@@ -161,20 +188,36 @@ contract UniswapV3PoolTest is Test {
         );
     }
 
-    function uniswapV3MintCallback(uint256 amount0, uint256 amount1) public {
+    function uniswapV3MintCallback(
+        uint256 amount0,
+        uint256 amount1,
+        bytes calldata data
+    ) public {
         if (transferInMintCallback) {
-            token0.transfer(msg.sender, amount0);
-            token1.transfer(msg.sender, amount1);
+            UniswapV3Pool.CallbackData memory extra = abi.decode(
+                data,
+                (UniswapV3Pool.CallbackData)
+            );
+            token0.transferFrom(extra.payer, msg.sender, amount0);
+            token1.transferFrom(extra.payer, msg.sender, amount1);
         }
     }
 
-    function uniswapV3SwapCallback(int256 amount0, int256 amount1) public {
+    function uniswapV3SwapCallback(
+        int256 amount0,
+        int256 amount1,
+        bytes calldata data
+    ) public {
+        UniswapV3Pool.CallbackData memory extra = abi.decode(
+            data,
+            (UniswapV3Pool.CallbackData)
+        );
         if (amount0 > 0) {
-            token0.transfer(msg.sender, uint256(amount0));
+            token0.transferFrom(extra.payer, msg.sender, uint256(amount0));
         }
 
         if (amount1 > 0) {
-            token1.transfer(msg.sender, uint256(amount1));
+            token1.transferFrom(extra.payer, msg.sender, uint256(amount1));
         }
     }
 }

@@ -46,6 +46,12 @@ contract UniswapV3Pool {
         int24 tick;
     }
 
+    struct CallbackData {
+        address token0;
+        address token1;
+        address payer;
+    }
+
     Slot0 public slot0;
 
     uint128 public liquidity;
@@ -69,7 +75,8 @@ contract UniswapV3Pool {
         address owner,
         int24 lowerTick,
         int24 upperTick,
-        uint128 amountLiquidity
+        uint128 amountLiquidity,
+        bytes calldata data
     ) external returns (uint256 amount0, uint256 amount1) {
         if (
             lowerTick >= upperTick ||
@@ -106,7 +113,8 @@ contract UniswapV3Pool {
 
         IUniswapV3MintCallback(msg.sender).uniswapV3MintCallback(
             amount0,
-            amount1
+            amount1,
+            data
         );
 
         if (amount0 > 0 && balance0Before + amount0 > balance0()) {
@@ -129,7 +137,8 @@ contract UniswapV3Pool {
     }
 
     function swap(
-        address recipient
+        address recipient,
+        bytes calldata data
     ) public returns (int256 amount0, int256 amount1) {
         int24 nextTick = 85184;
         uint160 nextPrice = 5604469350942327889444743441197;
@@ -144,7 +153,8 @@ contract UniswapV3Pool {
         uint256 balance1Before = balance1();
         IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(
             amount0,
-            amount1
+            amount1,
+            data
         );
         if (balance1Before + uint256(amount1) < balance1())
             revert("UniswapV3Pool: UNDERFLOW");
