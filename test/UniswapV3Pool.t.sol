@@ -46,8 +46,8 @@ contract UniswapV3PoolTest is Test {
         });
 
         (uint256 poolBalance0, uint256 poolBalance1) = setupTestCase(params);
-        uint256 expectedAmount0 = 0.998976618347425280 ether;
-        uint256 expectedAmount1 = 5000 ether;
+        uint256 expectedAmount0 = 0.998833192822975409 ether;
+        uint256 expectedAmount1 = 4999.187247111820044641 ether;
         assertEq(poolBalance0, expectedAmount0);
         assertEq(poolBalance1, expectedAmount1);
 
@@ -82,7 +82,7 @@ contract UniswapV3PoolTest is Test {
         );
     }
 
-    function testSwapBuyEth() public {
+    function test_SwapBuyEth() public {
         TestCaseParams memory params = TestCaseParams({
             wethBalance: 1 ether,
             usdcBalance: 5000 ether,
@@ -108,13 +108,16 @@ contract UniswapV3PoolTest is Test {
         });
 
         int256 userBalance0Before = int256(token0.balanceOf(address(this)));
+        int256 userBalance1Before = int256(token1.balanceOf(address(this)));
 
         (int256 amount0Delta, int256 amount1Delta) = pool.swap(
             address(this),
+            false,
+            swapAmount,
             abi.encode(extra)
         );
 
-        assertEq(amount0Delta, -0.008396714242162444 ether, "invalid ETH out");
+        assertEq(amount0Delta, -0.008396714242162445 ether, "invalid ETH out");
         assertEq(amount1Delta, 42 ether, "invalid USDC in");
 
         assertEq(
@@ -124,7 +127,7 @@ contract UniswapV3PoolTest is Test {
         );
         assertEq(
             token1.balanceOf(address(this)),
-            0,
+            uint256(userBalance1Before - amount1Delta),
             "invalid user USDC balance"
         );
 
